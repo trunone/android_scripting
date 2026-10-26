@@ -53,7 +53,7 @@ class AutomationCoreService : LifecycleService() {
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Automation Core Running")
-            .setContentText("Persistent JavaScript sandbox active")
+            .setContentText("Persistent JavaScript sandbox active in background")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -129,6 +129,17 @@ class AutomationCoreService : LifecycleService() {
         }
 
         return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // Ensure service remains alive and sticky if user swipes app away from recents
+        val restartServiceIntent = Intent(applicationContext, AutomationCoreService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            applicationContext.startForegroundService(restartServiceIntent)
+        } else {
+            applicationContext.startService(restartServiceIntent)
+        }
     }
 
     override fun onDestroy() {

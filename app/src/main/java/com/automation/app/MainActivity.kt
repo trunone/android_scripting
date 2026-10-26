@@ -71,6 +71,8 @@ class MainActivity : ComponentActivity() {
                 onStartService = {
                     selectedScript?.let {
                         AutomationCoreService.startService(this@MainActivity, it.content)
+                        // Move activity to background so the user returns to home screen while service runs
+                        moveTaskToBack(true)
                     }
                 },
                 onStopService = {
