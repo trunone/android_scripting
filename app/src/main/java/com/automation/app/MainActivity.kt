@@ -16,9 +16,11 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private val logs = mutableStateListOf<String>()
+    private lateinit var scriptRepository: ScriptRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        scriptRepository = ScriptRepository(this)
 
         lifecycleScope.launch {
             AutomationCoreService.logFlow.collectLatest { log ->
@@ -26,33 +28,50 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val defaultScript = """
-            AndroidSystemBridge.log("Engine running!");
-            setInterval(() => { AndroidSystemBridge.log("Tick"); }, 5000);
-            EventSystem.on("NOTIFICATION_RECEIVED", (n) => {
-                if (n.packageName === "com.whatsapp" && n.text.includes("ALERT")) {
-                    AndroidSystemBridge.vibrate(500);
-                    AndroidSystemBridge.launchApp("com.whatsapp");
-                }
-            });
-            EventSystem.on("UI_CHANGED", (ui) => {
-                if (ui.packageName === "com.android.settings" && ui.textItems.includes("Storage")) {
-                    AndroidSystemBridge.injectGlobalAction(1); // BACK
-                }
-            });
-        """.trimIndent()
-
         setContent {
-            var scriptText by remember { mutableStateOf(defaultScript) }
+            var scripts by remember { mutableStateOf(scriptRepository.getScripts()) }
+            var selectedScriptId by remember { mutableStateOf(scripts.firstOrNull()?.id ?: "") }
             val isRunning by AutomationCoreService.isRunning.collectAsState()
 
+            val selectedScript = scripts.find { it.id == selectedScriptId } ?: scripts.firstOrNull()
+
             MainScreen(
-                scriptText = scriptText,
-                onScriptTextChange = { scriptText = it },
+                scripts = scripts,
+                selectedScriptId = selectedScriptId,
+                onSelectScript = { selectedScriptId = it },
+                onAddScript = { name ->
+                    val newScript = ScriptItem(
+                        name = name,
+                        content = "// $name\nAndroidSystemBridge.log(\"Executing $name\");\n"
+                    )
+                    val updated = scripts + newScript
+                    scripts = updated
+                    selectedScriptId = newScript.id
+                    scriptRepository.saveScripts(updated)
+                },
+                onDeleteScript = { id ->
+                    if (scripts.size > 1) {
+                        val updated = scripts.filter { it.id != id }
+                        scripts = updated
+                        selectedScriptId = updated.first().id
+                        scriptRepository.saveScripts(updated)
+                    }
+                },
+                onScriptContentChange = { newContent ->
+                    if (selectedScript != null) {
+                        val updated = scripts.map {
+                            if (it.id == selectedScript.id) it.copy(content = newContent) else it
+                        }
+                        scripts = updated
+                        scriptRepository.saveScripts(updated)
+                    }
+                },
                 logs = logs,
                 isServiceRunning = isRunning,
                 onStartService = {
-                    AutomationCoreService.startService(this@MainActivity, scriptText)
+                    selectedScript?.let {
+                        AutomationCoreService.startService(this@MainActivity, it.content)
+                    }
                 },
                 onStopService = {
                     AutomationCoreService.stopService(this@MainActivity)
