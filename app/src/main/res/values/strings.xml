@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Automation App</string>
+    <string name="accessibility_service_description">Provides UI automation capabilities for user scripts.</string>
+</resources>
